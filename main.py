@@ -7,7 +7,6 @@ import json
 import os
 from datetime import timedelta
 
-
 # ===== CONFIG FILE SETUP =====
 CONFIG_FILE = "config.json"
 if not os.path.exists(CONFIG_FILE):
@@ -19,6 +18,9 @@ if not os.path.exists(CONFIG_FILE):
             "anti_link_punishment": "None",
             "anti_link_duration": 0,
             "anti_link_message": "Links are not allowed here!"
+            "admin_role": "Admin",
+            "suspend_role": "Suspended",
+            "ban_bolo_log": "ban-bolo-log"
         }, f, indent=4)
 
 with open(CONFIG_FILE, "r") as f:
@@ -262,6 +264,95 @@ async def ro_warn_remove(interaction: discord.Interaction, user: discord.Member)
 
     view = RemoveWarning(user_logs)
     await interaction.response.send_message("⚠️ Select a warning to remove:", view=view, ephemeral=True)
+
+### Admin Role
+
+@bot.tree.command(name="ro-admin-config")
+@app_commands.describe(role="Role to set as Admin")
+async def ro_admin_config(interaction: discord.Interaction, role: discord.Role):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ Admin only.", ephemeral=True)
+        return
+
+    config["admin_role"] = role.name
+
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=4)
+
+    await interaction.response.send_message(f"✅ Admin role set to `{role.name}`", ephemeral=True)
+
+### Suspend
+
+@bot.tree.command(name="ro-suspend-account")
+@app_commands.describe(user="User to suspend", reason="Reason for suspension", duration="Duration in minutes")
+async def ro_suspend_account(interaction: discord.Interaction, user: discord.Member, reason: str, duration: int):
+    with open(CONFIG_FILE, "r") as f:
+        config = json.load(f)
+
+    admin_role = discord.utils.get(interaction.guild.roles, name=config["admin_role"])
+    suspend_role = discord.utils.get(interaction.guild.roles, name=config["suspend_role"])
+
+    if admin_role not in interaction.user.roles:
+        await interaction.response.send_message("❌ Admin only.", ephemeral=True)
+        return
+
+    original_roles = [r.id for r in user.roles if not r.is_default()]
+    await user.edit(roles=[suspend_role])
+    
+    await interaction.response.send_message(f"⏸️ {user.mention} has been suspended for {duration} min.", ephemeral=False)
+    
+    await asyncio.sleep(duration * 60)
+
+    restored_roles = [discord.Object(id=r) for r in original_roles]
+    await user.edit(roles=restored_roles)
+    await interaction.followup.send(f"✅ {user.mention} has been unsuspended.", ephemeral=False)
+
+
+### Ban Bolo
+
+@bot.tree.command(name="ro-ban-bolo")
+@app_commands.describe(user="User to bolo", reason="Reason", pings="Pings to include", submit="Submit this bolo?")
+async def ro_ban_bolo(interaction: discord.Interaction, user: discord.Member, reason: str, pings: str, submit: str):
+    with open(CONFIG_FILE, "r") as f:
+        config = json.load(f)
+
+    admin_role = discord.utils.get(interaction.guild.roles, name=config["admin_role"])
+    if admin_role not in interaction.user.roles:
+        await interaction.response.send_message("❌ Admin only.", ephemeral=True)
+        return
+
+    if submit.lower() != "yes":
+        await interaction.response.send_message("❌ Bolo cancelled.", ephemeral=True)
+        return
+
+    log_channel = discord.utils.get(interaction.guild.text_channels, name=config["ban_bolo_log"])
+    if log_channel:
+        embed = discord.Embed(title="🚨 BAN BOLO", color=discord.Color.red())
+        embed.add_field(name="User", value=user.mention, inline=True)
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.set_footer(text=f"Submitted by {interaction.user.display_name}")
+        await log_channel.send(content=pings, embed=embed)
+
+    await interaction.response.send_message("✅ Ban BOLO sent.", ephemeral=True)
+
+
+### Ban
+
+@bot.tree.command(name="ro-ban")
+@app_commands.describe(user="User to ban", reason="Reason for the ban", dm="DM the user before banning?")
+async def ro_ban(interaction: discord.Interaction, user: discord.Member, reason: str, dm: str):
+    if interaction.user.id != interaction.guild.owner_id:
+        await interaction.response.send_message("❌ Owner only.", ephemeral=True)
+        return
+
+    if dm.lower() == "yes":
+        try:
+            await user.send(f"Hello {user.name}, you have been banned from Raiders Official for: **{reason}**.")
+        except:
+            pass
+
+    await user.ban(reason=reason)
+    await interaction.response.send_message(f"✅ {user.mention} has been banned.", ephemeral=False)
 
 
 # ===== RUN BOT =====
