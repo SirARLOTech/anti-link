@@ -17,7 +17,7 @@ if not os.path.exists(CONFIG_FILE):
             "anti_link_channel": "allowed-links",
             "anti_link_punishment": "None",
             "anti_link_duration": 0,
-            "anti_link_message": "Links are not allowed here!"
+            "anti_link_message": "Links are not allowed here!",
             "admin_role": "Admin",
             "suspend_role": "Suspended",
             "ban_bolo_log": "ban-bolo-log"
