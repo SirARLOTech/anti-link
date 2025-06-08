@@ -161,34 +161,6 @@ async def ro_official_message(interaction: discord.Interaction, channel: discord
     await channel.send(content=pings, embed=embed)
     await interaction.response.send_message("✅ Message sent.", ephemeral=True)
 
-# ===== Anti-Link Event Listener =====
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-    with open(CONFIG_FILE, "r") as f:
-        config = json.load(f)
-
-    link_regex = r"(https?://\S+)"
-    if re.search(link_regex, message.content):
-        if message.channel.name != config["anti_link_channel"]:
-            await message.delete()
-            punishment = config.get("anti_link_punishment", "None")
-            duration = config.get("anti_link_duration", 0)
-            warn_message = config.get("anti_link_message", "Links are not allowed here!")
-
-            if punishment == "Timeout":
-                try:
-                    await message.author.timeout(discord.utils.utcnow() + timedelta(minutes=duration))
-                except Exception as e:
-                    print(f"Failed to timeout: {e}")
-
-            await message.channel.send(f"{message.author.mention}, {warn_message}", delete_after=5)
-
-    await bot.process_commands(message)
-
-
 ### Warn Logs
 
 @bot.tree.command(name="ro-warn-logs")
