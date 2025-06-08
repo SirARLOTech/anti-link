@@ -326,6 +326,129 @@ async def ro_ban(interaction: discord.Interaction, user: discord.Member, reason:
     await user.ban(reason=reason)
     await interaction.response.send_message(f"✅ {user.mention} has been banned.", ephemeral=False)
 
+### Bolo Config
+
+@bot.tree.command(name="ro-bolo-config")
+@app_commands.describe(channel="Channel to send BOLOs to")
+async def ro_bolo_config(interaction: discord.Interaction, channel: discord.TextChannel):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ Admin only.", ephemeral=True)
+        return
+
+    config["ban_bolo_log"] = channel.name
+
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=4)
+
+    await interaction.response.send_message(f"✅ BOLO log channel set to {channel.mention}", ephemeral=True)
+### Suspend Config
+
+@bot.tree.command(name="ro-suspend-config")
+@app_commands.describe(role="Role that can use /ro-suspend-account")
+async def ro_suspend_config(interaction: discord.Interaction, role: discord.Role):
+    if interaction.user != interaction.guild.owner:
+        await interaction.response.send_message("❌ Only the server owner can use this command.", ephemeral=True)
+        return
+
+    config["suspend_allowed_role"] = role.name
+
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=4)
+
+    await interaction.response.send_message(f"✅ Suspend command allowed for the **{role.name}** role.", ephemeral=True)
+
+### Purge
+
+@bot.tree.command(name="ro-purge")
+@app_commands.describe(amount="Number of messages to delete (max 200)")
+async def ro_purge(interaction: discord.Interaction, amount: int):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ Admin only.", ephemeral=True)
+        return
+
+    if amount < 1 or amount > 200:
+        await interaction.response.send_message("❌ Amount must be between 1 and 200.", ephemeral=True)
+        return
+
+    deleted = await interaction.channel.purge(limit=amount)
+    await interaction.response.send_message(f"✅ Deleted {len(deleted)} messages.", ephemeral=True)
+
+
+### Kick
+
+@bot.tree.command(name="ro-kick")
+@app_commands.describe(user="User to kick", reason="Reason", dm="Send DM to user? Yes or No")
+async def ro_kick(interaction: discord.Interaction, user: discord.Member, reason: str, dm: str = "Yes"):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ Admin only.", ephemeral=True)
+        return
+
+    if dm.lower() == "yes":
+        try:
+            await user.send(f"You have been kicked from **{interaction.guild.name}** for: {reason}")
+        except:
+            pass
+
+    await user.kick(reason=reason)
+    await interaction.response.send_message(f"✅ {user} has been kicked for: {reason}")
+
+### Show configs
+
+@bot.tree.command(name="ro-config-show")
+async def ro_config_show(interaction: discord.Interaction):
+    if interaction.user != interaction.guild.owner:
+        await interaction.response.send_message("❌ Only the server owner can use this command.", ephemeral=True)
+        return
+
+    with open(CONFIG_FILE, "r") as f:
+        config_data = json.load(f)
+
+    config_text = "\n".join([f"**{key}**: {value}" for key, value in config_data.items()])
+    embed = discord.Embed(title="📄 Config Settings", description=config_text, color=discord.Color.gold())
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+### Invites
+
+@bot.tree.command(name="ro-invites")
+@app_commands.describe(user="User to check invites for")
+async def ro_invites(interaction: discord.Interaction, user: discord.Member):
+    with open(CONFIG_FILE, "r") as f:
+        config = json.load(f)
+
+    mod_role = discord.utils.get(interaction.guild.roles, name=config["warn_role"])
+    if mod_role not in interaction.user.roles:
+        await interaction.response.send_message("❌ You do not have permission.", ephemeral=True)
+        return
+
+    invites = await interaction.guild.invites()
+    user_invites = [invite for invite in invites if invite.inviter == user]
+    total_uses = sum(invite.uses for invite in user_invites)
+
+    embed = discord.Embed(title="📨 Invite Stats", color=discord.Color.purple())
+    embed.add_field(name="Inviter", value=user.mention)
+    embed.add_field(name="Total Invites Created", value=str(len(user_invites)))
+    embed.add_field(name="Total Uses", value=str(total_uses))
+    await interaction.response.send_message(embed=embed)
+
+### Credits
+
+@bot.tree.command(name="ro-server-info")
+@app_commands.describe(confirm="Type 'Yes' to view info")
+async def ro_server_info(interaction: discord.Interaction, confirm: str):
+    if confirm.lower() != "yes":
+        await interaction.response.send_message("❌ Confirmation required. Type 'Yes'.", ephemeral=True)
+        return
+
+    guild = interaction.guild
+    embed = discord.Embed(title=f"📊 Server Info: {guild.name}", color=discord.Color.blue())
+    embed.add_field(name="Members", value=str(guild.member_count))
+    embed.add_field(name="Bots", value=str(len([m for m in guild.members if m.bot])))
+    embed.add_field(name="Text Channels", value=str(len(guild.text_channels)))
+    embed.add_field(name="Voice Channels", value=str(len(guild.voice_channels)))
+    embed.add_field(name="Roles", value=str(len(guild.roles)))
+    embed.set_footer(text=f"ID: {guild.id}")
+    await interaction.response.send_message(embed=embed)
 
 # ===== RUN BOT =====
 import os
